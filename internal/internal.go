@@ -167,14 +167,20 @@ func (p *envoyExtAuthzGrpcServer) compilerUpdated(txn storage.Transaction) {
 
 func (p *envoyExtAuthzGrpcServer) listen() {
 
+	proto := "tcp"
+	addr := p.cfg.Addr
+	if strings.HasPrefix(addr, "unix://") {
+		proto = "unix"
+		addr = strings.TrimPrefix(addr, "unix://")
+	}
 	// The listener is closed automatically by Serve when it returns.
-	l, err := net.Listen("tcp", p.cfg.Addr)
+	l, err := net.Listen(proto, addr)
 	if err != nil {
 		logrus.WithField("err", err).Fatal("Unable to create listener.")
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"addr":              p.cfg.Addr,
+		"addr":              addr,
 		"query":             p.cfg.Query,
 		"path":              p.cfg.Path,
 		"dry-run":           p.cfg.DryRun,
