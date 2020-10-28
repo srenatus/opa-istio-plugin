@@ -103,6 +103,78 @@ var _ interface {
 	ErrorName() string
 } = TcpProtocolOptionsValidationError{}
 
+// Validate checks the field values on UpstreamHttpProtocolOptions with the
+// rules defined in the proto definition for this message. If any rules are
+// violated, an error is returned.
+func (m *UpstreamHttpProtocolOptions) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	// no validation rules for AutoSni
+
+	// no validation rules for AutoSanValidation
+
+	return nil
+}
+
+// UpstreamHttpProtocolOptionsValidationError is the validation error returned
+// by UpstreamHttpProtocolOptions.Validate if the designated constraints
+// aren't met.
+type UpstreamHttpProtocolOptionsValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e UpstreamHttpProtocolOptionsValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e UpstreamHttpProtocolOptionsValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e UpstreamHttpProtocolOptionsValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e UpstreamHttpProtocolOptionsValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e UpstreamHttpProtocolOptionsValidationError) ErrorName() string {
+	return "UpstreamHttpProtocolOptionsValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e UpstreamHttpProtocolOptionsValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sUpstreamHttpProtocolOptions.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = UpstreamHttpProtocolOptionsValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = UpstreamHttpProtocolOptionsValidationError{}
+
 // Validate checks the field values on HttpProtocolOptions with the rules
 // defined in the proto definition for this message. If any rules are
 // violated, an error is returned.
@@ -119,6 +191,27 @@ func (m *HttpProtocolOptions) Validate() error {
 				cause:  err,
 			}
 		}
+	}
+
+	if v, ok := interface{}(m.GetMaxConnectionDuration()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return HttpProtocolOptionsValidationError{
+				field:  "MaxConnectionDuration",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	if wrapper := m.GetMaxHeadersCount(); wrapper != nil {
+
+		if wrapper.GetValue() < 1 {
+			return HttpProtocolOptionsValidationError{
+				field:  "MaxHeadersCount",
+				reason: "value must be greater than or equal to 1",
+			}
+		}
+
 	}
 
 	return nil
@@ -201,6 +294,18 @@ func (m *Http1ProtocolOptions) Validate() error {
 	// no validation rules for AcceptHttp_10
 
 	// no validation rules for DefaultHostForHttp_10
+
+	if v, ok := interface{}(m.GetHeaderKeyFormat()).(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return Http1ProtocolOptionsValidationError{
+				field:  "HeaderKeyFormat",
+				reason: "embedded message failed validation",
+				cause:  err,
+			}
+		}
+	}
+
+	// no validation rules for EnableTrailers
 
 	return nil
 }
@@ -506,3 +611,169 @@ var _ interface {
 	Cause() error
 	ErrorName() string
 } = GrpcProtocolOptionsValidationError{}
+
+// Validate checks the field values on Http1ProtocolOptions_HeaderKeyFormat
+// with the rules defined in the proto definition for this message. If any
+// rules are violated, an error is returned.
+func (m *Http1ProtocolOptions_HeaderKeyFormat) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	switch m.HeaderFormat.(type) {
+
+	case *Http1ProtocolOptions_HeaderKeyFormat_ProperCaseWords_:
+
+		if v, ok := interface{}(m.GetProperCaseWords()).(interface{ Validate() error }); ok {
+			if err := v.Validate(); err != nil {
+				return Http1ProtocolOptions_HeaderKeyFormatValidationError{
+					field:  "ProperCaseWords",
+					reason: "embedded message failed validation",
+					cause:  err,
+				}
+			}
+		}
+
+	default:
+		return Http1ProtocolOptions_HeaderKeyFormatValidationError{
+			field:  "HeaderFormat",
+			reason: "value is required",
+		}
+
+	}
+
+	return nil
+}
+
+// Http1ProtocolOptions_HeaderKeyFormatValidationError is the validation error
+// returned by Http1ProtocolOptions_HeaderKeyFormat.Validate if the designated
+// constraints aren't met.
+type Http1ProtocolOptions_HeaderKeyFormatValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e Http1ProtocolOptions_HeaderKeyFormatValidationError) Field() string { return e.field }
+
+// Reason function returns reason value.
+func (e Http1ProtocolOptions_HeaderKeyFormatValidationError) Reason() string { return e.reason }
+
+// Cause function returns cause value.
+func (e Http1ProtocolOptions_HeaderKeyFormatValidationError) Cause() error { return e.cause }
+
+// Key function returns key value.
+func (e Http1ProtocolOptions_HeaderKeyFormatValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e Http1ProtocolOptions_HeaderKeyFormatValidationError) ErrorName() string {
+	return "Http1ProtocolOptions_HeaderKeyFormatValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e Http1ProtocolOptions_HeaderKeyFormatValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sHttp1ProtocolOptions_HeaderKeyFormat.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = Http1ProtocolOptions_HeaderKeyFormatValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = Http1ProtocolOptions_HeaderKeyFormatValidationError{}
+
+// Validate checks the field values on
+// Http1ProtocolOptions_HeaderKeyFormat_ProperCaseWords with the rules defined
+// in the proto definition for this message. If any rules are violated, an
+// error is returned.
+func (m *Http1ProtocolOptions_HeaderKeyFormat_ProperCaseWords) Validate() error {
+	if m == nil {
+		return nil
+	}
+
+	return nil
+}
+
+// Http1ProtocolOptions_HeaderKeyFormat_ProperCaseWordsValidationError is the
+// validation error returned by
+// Http1ProtocolOptions_HeaderKeyFormat_ProperCaseWords.Validate if the
+// designated constraints aren't met.
+type Http1ProtocolOptions_HeaderKeyFormat_ProperCaseWordsValidationError struct {
+	field  string
+	reason string
+	cause  error
+	key    bool
+}
+
+// Field function returns field value.
+func (e Http1ProtocolOptions_HeaderKeyFormat_ProperCaseWordsValidationError) Field() string {
+	return e.field
+}
+
+// Reason function returns reason value.
+func (e Http1ProtocolOptions_HeaderKeyFormat_ProperCaseWordsValidationError) Reason() string {
+	return e.reason
+}
+
+// Cause function returns cause value.
+func (e Http1ProtocolOptions_HeaderKeyFormat_ProperCaseWordsValidationError) Cause() error {
+	return e.cause
+}
+
+// Key function returns key value.
+func (e Http1ProtocolOptions_HeaderKeyFormat_ProperCaseWordsValidationError) Key() bool { return e.key }
+
+// ErrorName returns error name.
+func (e Http1ProtocolOptions_HeaderKeyFormat_ProperCaseWordsValidationError) ErrorName() string {
+	return "Http1ProtocolOptions_HeaderKeyFormat_ProperCaseWordsValidationError"
+}
+
+// Error satisfies the builtin error interface
+func (e Http1ProtocolOptions_HeaderKeyFormat_ProperCaseWordsValidationError) Error() string {
+	cause := ""
+	if e.cause != nil {
+		cause = fmt.Sprintf(" | caused by: %v", e.cause)
+	}
+
+	key := ""
+	if e.key {
+		key = "key for "
+	}
+
+	return fmt.Sprintf(
+		"invalid %sHttp1ProtocolOptions_HeaderKeyFormat_ProperCaseWords.%s: %s%s",
+		key,
+		e.field,
+		e.reason,
+		cause)
+}
+
+var _ error = Http1ProtocolOptions_HeaderKeyFormat_ProperCaseWordsValidationError{}
+
+var _ interface {
+	Field() string
+	Reason() string
+	Key() bool
+	Cause() error
+	ErrorName() string
+} = Http1ProtocolOptions_HeaderKeyFormat_ProperCaseWordsValidationError{}
