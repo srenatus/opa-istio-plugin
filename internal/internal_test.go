@@ -1370,7 +1370,8 @@ func TestGetParsedBody(t *testing.T) {
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			got, isBodyTruncated, err := getParsedBody(tc.input)
+			headers, body := tc.input.GetAttributes().GetRequest().GetHttp().GetHeaders(), tc.input.GetAttributes().GetRequest().GetHttp().GetBody()
+			got, isBodyTruncated, err := getParsedBody(headers, body)
 			if !reflect.DeepEqual(got, tc.want) {
 				t.Fatalf("expected result: %v, got: %v", tc.want, got)
 			}
@@ -1398,7 +1399,9 @@ func TestGetParsedBody(t *testing.T) {
 		}
 	  }`
 
-	_, _, err := getParsedBody(createCheckRequest(requestContentTypeJSONInvalid))
+	req := createCheckRequest(requestContentTypeJSONInvalid)
+	headers, body := req.GetAttributes().GetRequest().GetHttp().GetHeaders(), req.GetAttributes().GetRequest().GetHttp().GetBody()
+	_, _, err := getParsedBody(headers, body)
 	if err == nil {
 		t.Fatal("Expected error but got nil")
 	}
@@ -1642,7 +1645,8 @@ func TestParsedPathAndQuery(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		actualPath, actualQuery, _ := getParsedPathAndQuery(tt.request)
+		path := tt.request.GetAttributes().GetRequest().GetHttp().GetPath()
+		actualPath, actualQuery, _ := getParsedPathAndQuery(path)
 		if !reflect.DeepEqual(actualPath, tt.expectedPath) {
 			t.Errorf("parsed_path (%s): expected %s, actual %s", tt.request, tt.expectedPath, actualPath)
 		}
