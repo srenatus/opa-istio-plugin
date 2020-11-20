@@ -527,6 +527,88 @@ allow {
 }
 ```
 
+## Envoy xDS v2 and v2
+
+This plugin exposes both versions. For v3 requests, the protojson encoding is used for making the
+incoming `envoy.service.auth.v3.CheckRequest` available in `input`. It differs from the encoding
+used for v2 requests:
+
+In v3, all keys are lower camelcase. Also, needless nesting of oneof values is removed.
+
+For example, source address data that looks like this in v2,
+```
+"source": {
+  "address": {
+    "Address": {
+      "SocketAddress": {
+        "PortSpecifier": {
+          "PortValue": 59052
+        },
+        "address": "127.0.0.1"
+      }
+    }
+  }
+}
+```
+
+becomes, in v3,
+```
+"source": {
+  "address": {
+    "socketAddress": {
+      "address": "127.0.0.1",
+      "portValue": 59052
+    }
+  }
+}
+```
+
+The following table shows the rego code for common data, in v2 and v3:
+
+
+| information         |  rego v2 | rego v3 |
+|---------------------|----------|---------|
+| source address      | `input.attributes.source.address.Address.SocketAddress.address` | `input.attributes.source.address.socketAddress.address`|
+| source port         | `input.attributes.source.address.Address.SocketAddress.PortSpecifier.PortValue` | `input.attributes.source.address.socketAddress.portValue`|
+| destination address | `input.attributes.destination.address.Address.SocketAddress.address` | `input.attributes.destination.address.socketAddress.address`|
+| destination port    | `input.attributes.destination.address.Address.SocketAddress.PortSpecifier.PortValue` | `input.attributes.destination.address.socketAddress.portValue`|
+| dynamic metadata    | `input.attributes.metadata_context.filter_metadata` | `input.attributes.metadataContext.filterMetadata` |
+
+Due to those differences, it's important to know which version is used when writing policies.
+Thus this information is passed into the OPA evaluation under `input.version`, where you'll either
+find, for v2,
+
+```rego
+input.version == { "ext_authz": "v2", "encoding": "encoding/json" }
+```
+
+or, for v3,
+
+```rego
+input.version == { "ext_authz": "v3", "encoding": "protojson" }
+```
+
+This information can also be used to create policies that are compatible with both versions and
+encodings.
+
+To have Envoy use the v3 version of the service, it will need to be configured to do so.
+The http_filters entry should look like this (minimal version):
+```yaml
+http_filters:
+- name: envoy.ext_authz
+  typed_config:
+    '@type': type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+    transport_api_version: V3
+    grpc_service:
+      google_grpc: # or envoy_grpc
+        target_uri: "127.0.0.1:9191"
+```
+
+Note that further settings are required to have (raw) request bodies forwarded to the ext authz
+service.
+
+When using grpcurl (see below) you can choose with which version to interact.
+
 ## gRPC Server Reflection Usage
 
 This section provides examples of interacting with the Envoy External Authorization gRPC server using the `grpcurl` tool.
@@ -545,7 +627,7 @@ This section provides examples of interacting with the Envoy External Authorizat
   grpc.reflection.v1alpha.ServerReflection
   ```
 
-* Invoke RPC on the server
+* Invoke a v2 Check RPC on the server
 
   ```bash
   $ grpcurl -plaintext -d '
@@ -563,11 +645,12 @@ This section provides examples of interacting with the Envoy External Authorizat
 
   Output:
 
+  <!-- TODO(sr): update, pass --emit-defaults to remove the code: 0 -->
   ```bash
   {
     "status": {
       "code": 0
-  },
+    },
     "okResponse": {
       "headers": [
         {
