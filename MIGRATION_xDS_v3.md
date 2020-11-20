@@ -151,7 +151,7 @@ In V3, the input will look like this:
 Ordering aside, the V3 input matches the specified [JSON Mapping](https://developers.google.com/protocol-buffers/docs/proto3#json) for protocol buffers.
 Notably:
 
-- Keys are camelcase, starting with a lowercase letter (`Address` becomes `address`, `SocketAddress` becomes `socketAddress`, `metadata_context` becomes `metadataContext`)
+- Keys are camelCase, starting with a lowercase letter (`Address` becomes `address`, `SocketAddress` becomes `socketAddress`, `metadata_context` becomes `metadataContext`)
 - Timestamps are _strings_ following RFC3339, so `{ "time": { "nanos": 722473000, "seconds": 1605865667 }` becomes `"time": "2020-11-20T09:47:47.722473Z"`
 - OneOf types are flattened, so the `address` fields of `source` and `destination` change from (v2)
 ```
@@ -186,3 +186,52 @@ to (v3):
 ```
 
 This means if your policy was using `input.attributes.source.address.Address.SocketAddress.address` with v2, it's got to be changed to `input.attributes.source.address.socketAddress.address`.
+
+### Dynamic Metadata
+
+In v2, the dynamic metadata injected by an JWT authn filter would look like this:
+
+```
+{
+  "metadata_context": {
+    "filter_metadata": {
+      "envoy.filters.http.jwt_authn": {
+        "verified_jwt": {
+          "at_hash": "tQvbld0gQEnXznJOeUVHgQ",
+          "aud": "example-app",
+          "email": "kilgore@kilgore.trout",
+          "email_verified": true,
+          "exp": 1605955609,
+          "iat": 1605869209,
+          "iss": "http://127.0.0.1:5556/dex",
+          "name": "Kilgore Trout",
+          "sub": "Cg0wLTM4NS0yODA4OS0wEgRtb2Nr"
+        }
+      }
+    }
+  }
+}
+```
+
+In v3, it turns into
+```
+{
+  "metadataContext": {
+    "filterMetadata": {
+      "envoy.filters.http.jwt_authn": {
+        "verified_jwt": {
+          "at_hash": "tQvbld0gQEnXznJOeUVHgQ",
+          "aud": "example-app",
+          "email": "kilgore@kilgore.trout",
+          "email_verified": true,
+          "exp": 1605955609,
+          "iat": 1605869209,
+          "iss": "http://127.0.0.1:5556/dex",
+          "name": "Kilgore Trout",
+          "sub": "Cg0wLTM4NS0yODA4OS0wEgRtb2Nr"
+        }
+      }
+    }
+  }
+}
+```
