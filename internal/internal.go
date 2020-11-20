@@ -199,10 +199,15 @@ func (p *envoyExtAuthzGrpcServer) listen() {
 }
 
 func (p *envoyExtAuthzGrpcServer) Check(ctx context.Context, req *ext_authz_v3.CheckRequest) (*ext_authz_v3.CheckResponse, error) {
-	return p.check(ctx, req)
+	resp, stop, err := p.check(ctx, req)
+	if code := stop(); resp != nil && code != nil {
+		resp.Status = code
+	}
+	return resp, err
 }
 
-func (p *envoyExtAuthzGrpcServer) check(ctx context.Context, req interface{}) (resp *ext_authz_v3.CheckResponse, err error) {
+func (p *envoyExtAuthzGrpcServer) check(ctx context.Context, req interface{}) (*ext_authz_v3.CheckResponse, func() *rpc_status.Status, error) {
+	var err error
 	start := time.Now()
 
 	result := evalResult{}
@@ -213,27 +218,26 @@ func (p *envoyExtAuthzGrpcServer) check(ctx context.Context, req interface{}) (r
 
 	if err != nil {
 		logrus.WithField("err", err).Error("Unable to generate decision ID.")
-		return nil, err
+		return nil, func() *rpc_status.Status { return nil }, err
 	}
 
 	var input map[string]interface{}
 
-	defer func() {
+	stop := func() *rpc_status.Status {
 		result.metrics.Timer(metrics.ServerHandler).Stop()
 		logErr := p.log(ctx, input, &result, err)
 		if logErr != nil {
-			resp = &ext_authz_v3.CheckResponse{
-				Status: &rpc_status.Status{
-					Code:    int32(code.Code_UNKNOWN),
-					Message: logErr.Error(),
-				},
+			return &rpc_status.Status{
+				Code:    int32(code.Code_UNKNOWN),
+				Message: logErr.Error(),
 			}
 		}
-	}()
+		return nil
+	}
 
 	if ctx.Err() != nil {
 		err = errors.Wrap(ctx.Err(), "check request timed out before query execution")
-		return nil, err
+		return nil, stop, err
 	}
 
 	var bs []byte
@@ -248,7 +252,7 @@ func (p *envoyExtAuthzGrpcServer) check(ctx context.Context, req interface{}) (r
 	case *ext_authz_v3.CheckRequest:
 		bs, err = protojson.Marshal(req) // TODO(sr): Note that the encoding might have changed, figure out how.
 		if err != nil {
-			return nil, err
+			return nil, stop, err
 		}
 		path = req.GetAttributes().GetRequest().GetHttp().GetPath()
 		body = req.GetAttributes().GetRequest().GetHttp().GetBody()
@@ -256,7 +260,7 @@ func (p *envoyExtAuthzGrpcServer) check(ctx context.Context, req interface{}) (r
 	case *ext_authz_v2.CheckRequest:
 		bs, err = json.Marshal(req)
 		if err != nil {
-			return nil, err
+			return nil, stop, err
 		}
 		path = req.GetAttributes().GetRequest().GetHttp().GetPath()
 		body = req.GetAttributes().GetRequest().GetHttp().GetBody()
@@ -265,12 +269,12 @@ func (p *envoyExtAuthzGrpcServer) check(ctx context.Context, req interface{}) (r
 
 	err = util.UnmarshalJSON(bs, &input)
 	if err != nil {
-		return nil, err
+		return nil, stop, err
 	}
 
 	parsedPath, parsedQuery, err := getParsedPathAndQuery(path)
 	if err != nil {
-		return nil, err
+		return nil, stop, err
 	}
 
 	input["parsed_path"] = parsedPath
@@ -278,7 +282,7 @@ func (p *envoyExtAuthzGrpcServer) check(ctx context.Context, req interface{}) (r
 
 	parsedBody, isBodyTruncated, err := getParsedBody(headers, body)
 	if err != nil {
-		return nil, err
+		return nil, stop, err
 	}
 
 	input["parsed_body"] = parsedBody
@@ -286,15 +290,15 @@ func (p *envoyExtAuthzGrpcServer) check(ctx context.Context, req interface{}) (r
 
 	inputValue, err := ast.InterfaceToValue(input)
 	if err != nil {
-		return nil, err
+		return nil, stop, err
 	}
 
 	err = p.eval(ctx, inputValue, &result)
 	if err != nil {
-		return nil, err
+		return nil, stop, err
 	}
 
-	resp = &ext_authz_v3.CheckResponse{}
+	resp := &ext_authz_v3.CheckResponse{}
 
 	switch decision := result.decision.(type) {
 	case bool:
@@ -308,14 +312,14 @@ func (p *envoyExtAuthzGrpcServer) check(ctx context.Context, req interface{}) (r
 	case map[string]interface{}:
 		status, err := getResponseStatus(decision)
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to get response status")
+			return nil, stop, errors.Wrap(err, "failed to get response status")
 		}
 
 		resp.Status = &rpc_status.Status{Code: status}
 
 		responseHeaders, err := getResponseHeaders(decision)
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to get response headers")
+			return nil, stop, errors.Wrap(err, "failed to get response headers")
 		}
 
 		if status == int32(code.Code_OK) {
@@ -327,12 +331,12 @@ func (p *envoyExtAuthzGrpcServer) check(ctx context.Context, req interface{}) (r
 		} else {
 			body, err := getResponseBody(decision)
 			if err != nil {
-				return nil, errors.Wrap(err, "failed to get response body")
+				return nil, stop, errors.Wrap(err, "failed to get response body")
 			}
 
 			httpStatus, err := getResponseHTTPStatus(decision)
 			if err != nil {
-				return nil, errors.Wrap(err, "failed to get response http status")
+				return nil, stop, errors.Wrap(err, "failed to get response http status")
 			}
 
 			deniedResponse := &ext_authz_v3.DeniedHttpResponse{
@@ -348,7 +352,7 @@ func (p *envoyExtAuthzGrpcServer) check(ctx context.Context, req interface{}) (r
 
 	default:
 		err = fmt.Errorf("illegal value for policy evaluation result: %T", decision)
-		return nil, err
+		return nil, stop, err
 	}
 
 	if logrus.IsLevelEnabled(logrus.DebugLevel) {
@@ -374,7 +378,7 @@ func (p *envoyExtAuthzGrpcServer) check(ctx context.Context, req interface{}) (r
 		}
 	}
 
-	return resp, nil
+	return resp, stop, nil
 }
 
 func (p *envoyExtAuthzGrpcServer) eval(ctx context.Context, input ast.Value, result *evalResult, opts ...func(*rego.Rego)) error {
@@ -750,13 +754,17 @@ func (e *internalError) Error() string {
 }
 
 func (p *envoyExtAuthzV2Wrapper) Check(ctx context.Context, req *ext_authz_v2.CheckRequest) (*ext_authz_v2.CheckResponse, error) {
-	// TODO(sr) refactor metrics recording
-	respV3, err := p.v3.check(ctx, req)
+	var stop func() *rpc_status.Status
+	respV3, stop, err := p.v3.check(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	return v2Response(respV3), nil
+	respV2 := v2Response(respV3)
+	if code := stop(); code != nil {
+		respV2.Status = code
+	}
+	return respV2, nil
 }
 
 func v2Response(respV3 *ext_authz_v3.CheckResponse) *ext_authz_v2.CheckResponse {
