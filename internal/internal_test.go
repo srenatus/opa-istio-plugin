@@ -18,6 +18,7 @@ import (
 	"time"
 
 	ext_core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	ext_authz_v2 "github.com/envoyproxy/go-control-plane/envoy/service/auth/v2"
 	ext_authz "github.com/envoyproxy/go-control-plane/envoy/service/auth/v3"
 	"google.golang.org/genproto/googleapis/rpc/code"
 
@@ -727,7 +728,7 @@ func TestCheckWithLoggerError(t *testing.T) {
 		t.Fatal(err)
 	}
 	if output.Status.Code != int32(code.Code_UNKNOWN) {
-		t.Fatalf("Expected logger error code UNKNOWN but got %v", output.Status.Code)
+		t.Errorf("Expected logger error code UNKNOWN but got %v", output.Status.Code)
 	}
 
 	expectedMsg := "Bad Logger Error"
@@ -1690,6 +1691,61 @@ func TestLogWithCancelError(t *testing.T) {
 	expectedErrMsg := "eval_cancel_error: context deadline reached during query execution"
 	if event.Error.Error() != expectedErrMsg {
 		t.Fatalf("Expected error message %v but got %v", expectedErrMsg, event.Error.Error())
+	}
+}
+
+func TestVersionInfoInputV3(t *testing.T) {
+	var req ext_authz.CheckRequest
+	if err := util.Unmarshal([]byte(exampleAllowedRequest), &req); err != nil {
+		panic(err)
+	}
+	customLogger := &testPlugin{}
+
+	module := `
+		package envoy.authz
+
+		allow {
+			input.version.ext_authz == "v3"
+			input.version.encoding == "protojson"
+		}
+		`
+	server := testAuthzServerWithModule(module, "envoy/authz/allow", customLogger, false)
+	ctx := context.Background()
+	output, err := server.Check(ctx, &req)
+	if err != nil {
+		t.Fatalf("Expected no error but got %v", err)
+	}
+
+	if output.Status.Code != int32(code.Code_OK) {
+		t.Fatal("Expected request to be allowed but got:", output)
+	}
+}
+
+func TestVersionInfoInputV2(t *testing.T) {
+	var req ext_authz_v2.CheckRequest
+	if err := util.Unmarshal([]byte(exampleAllowedRequest), &req); err != nil {
+		panic(err)
+	}
+	customLogger := &testPlugin{}
+
+	module := `
+		package envoy.authz
+
+		allow {
+			input.version.ext_authz == "v2"
+			input.version.encoding == "encoding/json"
+		}
+		`
+	serverV3 := testAuthzServerWithModule(module, "envoy/authz/allow", customLogger, false)
+	server := &envoyExtAuthzV2Wrapper{serverV3}
+	ctx := context.Background()
+	output, err := server.Check(ctx, &req)
+	if err != nil {
+		t.Fatalf("Expected no error but got %v", err)
+	}
+
+	if output.Status.Code != int32(code.Code_OK) {
+		t.Fatal("Expected request to be allowed but got:", output)
 	}
 }
 

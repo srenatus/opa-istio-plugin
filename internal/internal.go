@@ -53,6 +53,9 @@ const PluginName = "envoy_ext_authz_grpc"
 
 var revisionPath = storage.MustParsePath("/system/bundle/manifest/revision")
 
+var v2Info = map[string]string{"ext_authz": "v2", "encoding": "encoding/json"}
+var v3Info = map[string]string{"ext_authz": "v3", "encoding": "protojson"}
+
 type evalResult struct {
 	revision   string
 	decisionID string
@@ -242,7 +245,7 @@ func (p *envoyExtAuthzGrpcServer) check(ctx context.Context, req interface{}) (*
 
 	var bs []byte
 	var path, body string
-	var headers map[string]string
+	var headers, version map[string]string
 
 	// NOTE: The path/body/headers blocks look silly, but they allow us to retrieve
 	//       the parts of the incoming request we care about, without having to convert
@@ -250,13 +253,14 @@ func (p *envoyExtAuthzGrpcServer) check(ctx context.Context, req interface{}) (*
 	//       etc -- we only care for its JSON representation as fed into evaluation later.
 	switch req := req.(type) {
 	case *ext_authz_v3.CheckRequest:
-		bs, err = protojson.Marshal(req) // TODO(sr): Note that the encoding might have changed, figure out how.
+		bs, err = protojson.Marshal(req)
 		if err != nil {
 			return nil, stop, err
 		}
 		path = req.GetAttributes().GetRequest().GetHttp().GetPath()
 		body = req.GetAttributes().GetRequest().GetHttp().GetBody()
 		headers = req.GetAttributes().GetRequest().GetHttp().GetHeaders()
+		version = v3Info
 	case *ext_authz_v2.CheckRequest:
 		bs, err = json.Marshal(req)
 		if err != nil {
@@ -265,12 +269,14 @@ func (p *envoyExtAuthzGrpcServer) check(ctx context.Context, req interface{}) (*
 		path = req.GetAttributes().GetRequest().GetHttp().GetPath()
 		body = req.GetAttributes().GetRequest().GetHttp().GetBody()
 		headers = req.GetAttributes().GetRequest().GetHttp().GetHeaders()
+		version = v2Info
 	}
 
 	err = util.UnmarshalJSON(bs, &input)
 	if err != nil {
 		return nil, stop, err
 	}
+	input["version"] = version
 
 	parsedPath, parsedQuery, err := getParsedPathAndQuery(path)
 	if err != nil {
