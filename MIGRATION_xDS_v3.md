@@ -1,5 +1,20 @@
 # Notes on migrating to xDS v3 API (envoy.service.auth.v2.Authorization -> envoy.service.auth.v3.Authorization)
 
+## How to migrate in Envoy's config
+
+This is the minimal config to have Envoy send v3 requests:
+
+```yaml
+- name: envoy.ext_authz
+  typed_config:
+    '@type': type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+    transport_api_version: V3 # defaults to v2
+    grpc_service:
+      google_grpc:
+        stat_prefix: ext_authz
+        target_uri: "127.0.0.1:9191"
+```
+
 ## CheckResponse fields
 
 In v3, CheckResponse has gotten new fields:
@@ -42,7 +57,7 @@ In the v2 implementation, opa-envoy-plugin used a mapping from protobuf to JSON 
 With the migration to v3, this is adjusted. The encoding changes for well-known types:
 
 - `attributes.request.time` is `google.protobuf.Timestamp`
-- `attributes.metadata_context.filter_metadata` is `map<string, google.protobuf.Struct`
+- `attributes.metadata_context.filter_metadata` is `map<string, google.protobuf.Struct>`
 
 as well as the encoding of "oneof" fields, and the mapping of protobuf message fields to JSON object keys.
 See below for an example.
