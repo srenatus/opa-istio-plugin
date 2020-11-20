@@ -541,13 +541,14 @@ This section provides examples of interacting with the Envoy External Authorizat
 
   ```bash
   envoy.service.auth.v2.Authorization
+  envoy.service.auth.v3.Authorization
   grpc.reflection.v1alpha.ServerReflection
   ```
 
 * Invoke RPC on the server
 
   ```bash
-  $ grpcurl -plaintext -import-path ./proto/ -proto ./proto/envoy/service/auth/v2/external_auth.proto -d '
+  $ grpcurl -plaintext -d '
   {
     "attributes": {
       "request": {
@@ -579,10 +580,6 @@ This section provides examples of interacting with the Envoy External Authorizat
     }
   }
   ```
-
-The `-proto` and `-import-path` flags tell `grpcurl` the relevant proto source file and the folder from which
-dependencies can be imported respectively. These flags need to be provided as the Envoy External Authorization gRPC
-server does not support reflection. See this [issue](https://github.com/grpc/grpc-go/issues/1873) for details.
 
 ## Dependencies
 
