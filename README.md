@@ -607,6 +607,10 @@ http_filters:
 Note that further settings are required to have (raw) request bodies forwarded to the ext authz
 service.
 
+For the use in Istio, _at least_ Istio 1.7.0 is **required** to use a v3 ExtAuthz filter, [see
+the 1.7.0 release notes](https://istio.io/latest/news/releases/1.7.x/announcing-1.7/upgrade-notes/#envoyfilter-syntax-change) for details.
+<!-- NOTE(sr): https://github.com/istio/istio/commit/e0e53ee9190049a0126490f3b9b59cb3f3210620 -->
+
 When using grpcurl (see below) you can choose with which version to interact.
 
 ## gRPC Server Reflection Usage

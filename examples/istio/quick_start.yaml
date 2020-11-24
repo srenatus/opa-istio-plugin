@@ -22,7 +22,8 @@ spec:
         value:
           name: envoy.ext_authz
           typed_config:
-            "@type": "type.googleapis.com/envoy.config.filter.http.ext_authz.v2.ExtAuthz"
+            '@type': type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+            transport_api_version: V3
             status_on_error:
               code: ServiceUnavailable
             with_request_body:
@@ -393,8 +394,14 @@ data:
     package istio.authz
 
     import input.attributes.request.http as http_request
+    import input.parsed_path
 
     default allow = false
+
+    allow {
+        parsed_path[0] == "health"
+        http_request.method == "GET"
+    }
 
     allow {
         roles_for_user[r]
