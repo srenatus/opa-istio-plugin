@@ -162,7 +162,7 @@ The OPA-Envoy plugin supports the following configuration fields:
 | `plugins["envoy_ext_authz_grpc"].addr` | No | Set listening address of Envoy External Authorization gRPC server. This must match the value configured in the Envoy config. Default: `:9191`. |
 | `plugins["envoy_ext_authz_grpc"].path` | No | Specifies the hierarchical policy decision path. The policy decision can either be a `boolean` or an `object`. If boolean, `true` indicates the request should be allowed and `false` indicates the request should be denied. If the policy decision is an object, it **must** contain the `allowed` key set to either `true` or `false` to indicate if the request is allowed or not respectively. It can optionally contain a `headers` field to send custom headers to the downstream client or upstream. An optional `body` field can be included in the policy decision to send a response body data to the downstream client. Also an optional `http_status` field can be included to send a HTTP response status code to the downstream client other than `403 (Forbidden)`. Default: `envoy/authz/allow`.|
 | `plugins["envoy_ext_authz_grpc"].dry-run` | No | Configures the Envoy External Authorization gRPC server to unconditionally return an `ext_authz.CheckResponse.Status` of `google_rpc.Status{Code: google_rpc.OK}`. Default: `false`. |
-|`plugins["envoy_ext_authz_grpc"].enable-reflection`| No | Enables gRPC server reflection on the Envoy External Authorization gRPC server. Default: `false`. |
+| `plugins["envoy_ext_authz_grpc"].enable-reflection` | No | Enables gRPC server reflection on the Envoy External Authorization gRPC server. Default: `false`. |
 
 If the configuration does not specify the `path` field, `envoy/authz/allow` will be considered as the default policy
 decision path. `data.envoy.authz.allow` will be the name of the policy decision to query in the default case.
@@ -229,7 +229,7 @@ The policy also restricts an `admin` user, in this case `bob` from creating an e
 The policy uses the `io.jwt.decode_verify` builtin function to parse and verify the JWT containing information
 about the user making the request.
 
-```ruby
+```rego
 package envoy.authz
 
 import input.attributes.request.http as http_request
@@ -276,6 +276,65 @@ action_allowed {
 ### Example Input
 
 The `input` value defined for your policy will resemble the JSON below:
+
+```json
+{
+  "attributes": {
+    "source": {
+      "address": {
+        "socketAddress": {
+          "address": "172.17.0.1",
+          "portValue": 61402
+        }
+      }
+    },
+    "destination": {
+      "address": {
+        "socketAddress": {
+          "address": "172.17.06",
+          "portValue": 8000
+        }
+      }
+    },
+    "request": {
+      "time": "2020-11-20T09:47:47.722473Z",
+      "http": {
+        "id":"13519049518330544501",
+        "method": "POST",
+        "headers": {
+          ":authority":"192.168.99.206:30164",
+          ":method":"POST",
+          ":path":"/people?lang=en",
+          "accept": "*/*",
+          "authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYWRtaW4iLCJzdWIiOiJZbTlpIiwibmJmIjoxNTE0ODUxMTM5LCJleHAiOjE2NDEwODE1Mzl9.WCxNAveAVAdRCmkpIObOTaSd0AJRECY2Ch2Qdic3kU8",
+          "content-length":"41",
+          "content-type":"application/json",
+          "user-agent":"curl/7.54.0",
+          "x-forwarded-proto":"http",
+          "x-request-id":"7bca5c86-bf55-432c-b212-8c0f1dc999ec"
+        },
+        "host":"192.168.99.206:30164",
+        "path":"/people?lang=en",
+        "protocol":"HTTP/1.1",
+        "body":"{\"firstname\":\"Charlie\", \"lastname\":\"Opa\"}",
+        "size":41
+      }
+    },
+    "metadataContext": {}
+  },
+  "parsed_body":{"firstname": "Charlie", "lastname": "Opa"},
+  "parsed_path":["people"],
+  "parsed_query": {"lang": ["en"]},
+  "truncated_body": false,
+  "version": {
+    "encoding":"protojson",
+    "ext_authz":"v3"
+  }
+}
+```
+Note that this is the input [using the v3 API](#envoy-xds-v2-and-v2).
+
+<details><summary>See here for an example of v2 input</summary>
 
 ```json
 {
@@ -331,16 +390,21 @@ The `input` value defined for your policy will resemble the JSON below:
   "parsed_body":{"firstname": "Charlie", "lastname": "Opa"},
   "parsed_path":["people"],
   "parsed_query": {"lang": ["en"]},
-  "truncated_body": false
+  "truncated_body": false,
+  "version": {
+    "encoding":"encoding/json",
+    "ext_authz":"v2"
+  }
 }
 ```
+</details>
 
 The `parsed_path` field in the input is generated from the `path` field in the HTTP request which is included in the
 Envoy External Authorization `CheckRequest` message type. This field provides the request path as a string array which
 can help policy authors perform pattern matching on the HTTP request path. The below sample policy allows anyone to
 access the path `/people`.
 
-```ruby
+```rego
 package envoy.authz
 
 default allow = false
@@ -354,7 +418,7 @@ The `parsed_query` field in the input is also generated from the `path` field in
 the HTTP url query as a map of string array. The below sample policy allows anyone to access the path
 `/people?lang=en&id=1&id=2`.
 
-```ruby
+```rego
 package envoy.authz
 
 default allow = false
@@ -370,7 +434,7 @@ The `parsed_body` field in the input is generated from the `body` field in the H
 Envoy External Authorization `CheckRequest` message type. This field contains the deserialized JSON request body which
 can then be used in a policy as shown below.
 
-```ruby
+```rego
 package envoy.authz
 
 default allow = false
@@ -391,7 +455,7 @@ The `allow` rule in the below policy when queried generates an `object` that pro
 (ie. `allowed` or `denied`) along with some headers, body data and HTTP status which will be included in the response
 that is sent back to the downstream client or upstream.
 
-```ruby
+```rego
 package envoy.authz
 
 default allow = {
@@ -482,7 +546,8 @@ Envoy can be configured to pass validated JWT payload data into the `ext_authz` 
 and `payload_in_metadata`.
 
 ### Example Envoy Configuration
-```ruby
+
+```yaml
 http_filters:
 - name: envoy.filters.http.jwt_authn
   typed_config:
@@ -499,9 +564,11 @@ http_filters:
 ```
 
 ### Example OPA Input
+
 This will result in something like the following dictionary being added to `input.attributes` (some common fields have
 been excluded for brevity):
-```ruby
+
+```
   "metadata_context": {
     "filter_metadata": {
       "envoy.filters.http.jwt_authn": {
@@ -519,7 +586,7 @@ been excluded for brevity):
 
 This JWT data can be accessed in OPA policy like this:
 
-```ruby
+```rego
 jwt_payload = input.attributes.metadata_context.filter_metadata["envoy.filters.http.jwt_authn"].verified_jwt
 
 allow {
@@ -529,8 +596,9 @@ allow {
 
 ## Envoy xDS v2 and v2
 
-This plugin exposes both versions. For v3 requests, the protojson encoding is used for making the
-incoming `envoy.service.auth.v3.CheckRequest` available in `input`. It differs from the encoding
+This plugin exposes both versions. For v3 requests, the [specified JSON mapping for protobuf](https://developers.google.com/protocol-buffers/docs/proto3#json)
+is used for making the incoming `envoy.service.auth.v3.CheckRequest` available in `input`.
+It differs from the encoding
 used for v2 requests:
 
 In v3, all keys are lower camelcase. Also, needless nesting of oneof values is removed.
@@ -631,7 +699,7 @@ This section provides examples of interacting with the Envoy External Authorizat
   grpc.reflection.v1alpha.ServerReflection
   ```
 
-* Invoke a v2 Check RPC on the server
+* Invoke a v3 Check RPC on the server
 
   ```bash
   $ grpcurl -plaintext -d '
@@ -644,16 +712,15 @@ This section provides examples of interacting with the Envoy External Authorizat
         }
       }
     }
-  }' localhost:9191 envoy.service.auth.v2.Authorization/Check
+  }' localhost:9191 envoy.service.auth.v3.Authorization/Check
   ```
 
   Output:
 
-  <!-- TODO(sr): update, pass --emit-defaults to remove the code: 0 -->
-  ```bash
+  ```
   {
     "status": {
-      "code": 0
+
     },
     "okResponse": {
       "headers": [
