@@ -201,6 +201,7 @@ func (p *envoyExtAuthzGrpcServer) listen() {
 	p.manager.UpdatePluginStatus(PluginName, &plugins.Status{State: plugins.StateNotReady})
 }
 
+// Check is envoy.service.auth.v3.Authorization/Check
 func (p *envoyExtAuthzGrpcServer) Check(ctx context.Context, req *ext_authz_v3.CheckRequest) (*ext_authz_v3.CheckResponse, error) {
 	resp, stop, err := p.check(ctx, req)
 	if code := stop(); resp != nil && code != nil {
@@ -759,17 +760,21 @@ func (e *internalError) Error() string {
 	return e.Message
 }
 
+// Check is envoy.service.auth.v2.Authorization/Check
 func (p *envoyExtAuthzV2Wrapper) Check(ctx context.Context, req *ext_authz_v2.CheckRequest) (*ext_authz_v2.CheckResponse, error) {
 	var stop func() *rpc_status.Status
+	respV2 := &ext_authz_v2.CheckResponse{}
 	respV3, stop, err := p.v3.check(ctx, req)
+	defer func() {
+		if code := stop(); code != nil {
+			respV2.Status = code
+		}
+	}()
+
 	if err != nil {
 		return nil, err
 	}
-
-	respV2 := v2Response(respV3)
-	if code := stop(); code != nil {
-		respV2.Status = code
-	}
+	respV2 = v2Response(respV3)
 	return respV2, nil
 }
 

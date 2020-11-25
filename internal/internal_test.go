@@ -737,6 +737,92 @@ func TestCheckWithLoggerError(t *testing.T) {
 	}
 }
 
+// Some decision log related tests are replicated for envoy.service.auth.v2.Authorization/Check
+// here to ensure the stop()-function logic is correct.
+func TestCheckWithLoggerErrorV2(t *testing.T) {
+	var req ext_authz_v2.CheckRequest
+	if err := util.Unmarshal([]byte(exampleDeniedRequest), &req); err != nil {
+		panic(err)
+	}
+
+	server := envoyExtAuthzV2Wrapper{testAuthzServer(&testPluginError{}, false)}
+	ctx := context.Background()
+	output, err := server.Check(ctx, &req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if output.Status.Code != int32(code.Code_UNKNOWN) {
+		t.Errorf("Expected logger error code UNKNOWN but got %v", output.Status.Code)
+	}
+
+	expectedMsg := "Bad Logger Error"
+	if output.Status.Message != expectedMsg {
+		t.Fatalf("Expected error message %v, but got %v", expectedMsg, output.Status.Message)
+	}
+}
+
+func TestCheckBadDecisionWithLoggerV2(t *testing.T) {
+	var req ext_authz_v2.CheckRequest
+	if err := util.Unmarshal([]byte(exampleInvalidRequest), &req); err != nil {
+		panic(err)
+	}
+
+	// create custom logger
+	customLogger := &testPlugin{}
+
+	server := envoyExtAuthzV2Wrapper{testAuthzServer(customLogger, false)}
+	ctx := context.Background()
+	output, err := server.Check(ctx, &req)
+
+	if err == nil {
+		t.Fatal("Expected error but got nil")
+	}
+
+	if output != nil {
+		t.Fatalf("Expected no output but got %v", output)
+	}
+
+	if len(customLogger.events) != 1 {
+		t.Fatal("Unexpected events:", customLogger.events)
+	}
+
+	event := customLogger.events[0]
+
+	if event.Error == nil || event.Path != "envoy/authz/allow" || event.Revision != "" || event.Result != nil ||
+		event.DecisionID == "" || event.Metrics == nil {
+		t.Fatalf("Unexpected events: %+v", customLogger.events)
+	}
+}
+
+func TestCheckDenyWithLoggerV2(t *testing.T) {
+	var req ext_authz_v2.CheckRequest
+	if err := util.Unmarshal([]byte(exampleDeniedRequest), &req); err != nil {
+		panic(err)
+	}
+
+	customLogger := &testPlugin{}
+	server := envoyExtAuthzV2Wrapper{testAuthzServer(customLogger, false)}
+	ctx := context.Background()
+	output, err := server.Check(ctx, &req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if output.Status.Code != int32(code.Code_PERMISSION_DENIED) {
+		t.Fatal("Expected request to be denied but got:", output)
+	}
+
+	if len(customLogger.events) != 1 {
+		t.Fatal("Unexpected events:", customLogger.events)
+	}
+
+	event := customLogger.events[0]
+
+	if event.Error != nil || event.Path != "envoy/authz/allow" || event.Revision != "" || *event.Result == true ||
+		event.DecisionID == "" || event.Metrics == nil {
+		t.Fatal("Unexpected events:", customLogger.events)
+	}
+}
+
 func TestCheckTwiceWithCachedBuiltinCall(t *testing.T) {
 	var req ext_authz.CheckRequest
 	if err := util.Unmarshal([]byte(exampleDeniedRequest), &req); err != nil {
